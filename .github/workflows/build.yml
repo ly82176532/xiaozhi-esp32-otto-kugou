@@ -1,0 +1,42 @@
+name: Build Otto Robot (Kugou Music)
+
+# 这个文件会替换官方仓库里的 .github/workflows/build.yml。
+# 官方那份会在 push 时编译「所有板子」（非常慢），这份只编译 otto-robot 一块板。
+# 编译环境 espressif/idf:v6.0.2 与设备出厂固件完全一致。
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build otto-robot
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0.2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build otto-robot firmware
+        shell: bash
+        run: |
+          source $IDF_PATH/export.sh
+          python scripts/build.py otto-robot --name otto-robot
+
+      - name: Show firmware info
+        shell: bash
+        run: |
+          ls -lh build/merged-binary.bin
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otto-robot-firmware
+          path: build/merged-binary.bin
+          if-no-files-found: error
