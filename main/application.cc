@@ -1145,6 +1145,26 @@ void Application::HandleNotificationFinished(uint32_t playback_id, bool success)
 }
 
 bool Application::StartMusicPlayback(const std::string& audio_url, const std::string& title) {
+    // [本地补丁] 放宽起播条件：允许在「正在说话 / 正在聆听」时直接切到音乐。
+    // 原版要求必须处于 idle。模型只要先开口说一句"好的，正在为你播放"，
+    // 播放就必然失败（设备端返回 device is busy or the url is invalid）。
+    if (notify_player_.IsBusy() || music_player_.IsBusy()) {
+        ESP_LOGW(TAG, "Ignoring music playback while a player is busy");
+        return false;
+    }
+    const DeviceState state_before_music = GetDeviceState();
+    if (state_before_music == kDeviceStateSpeaking) {
+        ESP_LOGI(TAG, "Music requested while speaking, aborting current speech");
+        AbortSpeaking(kAbortReasonNone);
+        SetDeviceState(kDeviceStateIdle);
+    } else if (state_before_music == kDeviceStateListening) {
+        ESP_LOGI(TAG, "Music requested while listening, stopping listening");
+        if (protocol_) {
+            protocol_->SendStopListening();
+        }
+        SetDeviceState(kDeviceStateIdle);
+    }
+
     if (GetDeviceState() != kDeviceStateIdle || notify_player_.IsBusy() || music_player_.IsBusy()) {
         ESP_LOGW(TAG, "Ignoring music playback while device is busy");
         return false;
